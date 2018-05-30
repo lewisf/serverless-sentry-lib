@@ -304,10 +304,21 @@ class RavenLambdaWrapper {
 		// into all callbacks
 		return (event, context, callback) => {
 
+			let callbackCalled = false;
+			const wrappedCallback = () => {
+				callbackCalled = true;
+				callback(arguments);
+			};
+
 			if (!ravenInstalled) {
 				// Directly invoke the original handler
-				handler(event, context, callback);
-				return;
+				const maybeThennable = handler(event, context, wrappedCallback);
+				if (!callbackCalled && maybeThennable.then) {
+					return maybeThennable;
+				}
+				else {
+					return;
+				}
 			}
 
 			context.done    = wrapCallback(pluginConfig, context.done.bind(context));
@@ -391,7 +402,10 @@ class RavenLambdaWrapper {
 					}
 
 					// And finally invoke the original handler code
-					handler(event, context, callback);
+					const maybeThennable = handler(event, context, wrappedCallback);
+					if (!callbackCalled && maybeThennable.then) {
+						return maybeThennable;
+					}
 				}
 				catch (err) {
 					// Catch and log synchronous exceptions thrown by the handler
